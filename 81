@@ -1,0 +1,272 @@
+local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/Rain-Design/Unnamed/main/Library.lua'))()
+Library.Theme = "Dark"
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local player = Players.LocalPlayer
+
+-- Variables
+local isFarming = false
+local currentField = "All"
+local walkSpeed = 50
+local collectRadius = 80
+local farmBalloons = false 
+local farmBubbles = false
+local isConverting = false
+local myPlatform = nil
+
+local FlowerZones = workspace:WaitForChild("FlowerZones")
+local Fields = {"All", "Sunflower Field", "Mushroom Field", "Clover Field", "Spider Field", "Blue Flower Field", "Strawberry Field", "Bamboo Field", "Pine Tree Forest", "Cactus Field", "Pumpkin Patch", "Rose Field", "Mountain Top Field"}
+
+-- ========== UTILITY FUNCTIONS ==========
+local function scanForHive()
+    local platforms = workspace:FindFirstChild("HivePlatforms")
+    if platforms then
+        for _, plat in pairs(platforms:GetChildren()) do
+            local playerRef = plat:FindFirstChild("PlayerRef")
+            if playerRef and playerRef.Value == player then 
+                myPlatform = plat
+                return true 
+            end
+        end
+    end
+    return false
+end
+
+local function placeSprinkler()
+    task.wait(0.5)
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.One, false, game)
+    task.wait(0.1)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.One, false, game)
+end
+
+local function stableTeleport(pos)
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.Velocity = Vector3.zero
+        local targetPos = typeof(pos) == "CFrame" and pos.Position or pos
+        hrp.CFrame = CFrame.new(targetPos + Vector3.new(0,3,0)) * CFrame.Angles(0, math.rad(hrp.Orientation.Y), 0)
+        hrp.Anchored = true
+        task.wait(0.2)
+        hrp.Anchored = false
+    end
+end
+
+-- ========== VISUALS (0.4 BLUE BOX) ==========
+local FieldBox = Instance.new("Part")
+FieldBox.Name = "FieldBoundaryVisual"
+FieldBox.Material = Enum.Material.ForceField
+FieldBox.Color = Color3.fromRGB(0, 150, 255)
+FieldBox.Transparency = 1
+FieldBox.CanCollide = false
+FieldBox.CastShadow = false
+FieldBox.Anchored = true
+FieldBox.Parent = workspace
+
+local function updateVisuals()
+    local zone = FlowerZones:FindFirstChild(currentField)
+    if isFarming and zone and currentField ~= "All" then
+        FieldBox.Transparency = 0.4
+        FieldBox.Size = Vector3.new(zone.Size.X, 3, zone.Size.Z) 
+        FieldBox.CFrame = zone.CFrame * CFrame.new(0, 1.5, 0)
+    else
+        FieldBox.Transparency = 1
+    end
+end
+
+-- ========== UI SETUP ==========
+local Window = Library:Window({ Text = "BSS Internal V48" })
+local MainTab = Window:Tab({ Text = "Macro Setup" })
+local TPTab = Window:Tab({ Text = "Teleports" })
+local QuestTab = Window:Tab({ Text = "Quests" })
+local ExploitTab = Window:Tab({ Text = "Exploits" })
+
+local FarmSection = MainTab:Section({ Text = "Automation" })
+local StatsSection = MainTab:Section({ Text = "Session Stats" })
+local SettingsSection = MainTab:Section({ Text = "Settings" })
+local StickerSection = ExploitTab:Section({ Text = "Sticker Exploits" })
+
+local honeyLabel = StatsSection:Button({ Text = "Honey: 0" })
+local pollenLabel = StatsSection:Button({ Text = "Pollen: 0" })
+
+task.spawn(function()
+    while task.wait(0.5) do
+        local stats = player:FindFirstChild("CoreStats")
+        if stats then
+            honeyLabel:SetText("Honey: " .. tostring(math.floor(stats.Honey.Value)))
+            pollenLabel:SetText("Pollen: " .. tostring(math.floor(stats.Pollen.Value)) .. " / " .. tostring(math.floor(stats.Capacity.Value)))
+        end
+        updateVisuals()
+    end
+end)
+
+-- ========== EXPLOITS: STICKER TP & REVEAL ==========
+StickerSection:Button({
+    Text = "Reveal & TP All Stickers",
+    Callback = function()
+        local folder = workspace:FindFirstChild("HiddenStickers")
+        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if folder and hrp then
+            for _, sticker in pairs(folder:GetChildren()) do
+                if sticker.Name == "HiddenStickerPart" and sticker:IsA("BasePart") then
+                    -- VISUAL REVEAL: Blue Block, 0 Transparency
+                    sticker.Transparency = 0
+                    sticker.Color = Color3.fromRGB(0, 0, 255)
+                    sticker.Material = Enum.Material.Neon
+                    
+                    -- CLIENT TP: Pull to player
+                    sticker.CFrame = hrp.CFrame * CFrame.new(0, 0, -3)
+                    
+                    -- AUTO CLICK
+                    local click = sticker:FindFirstChildOfClass("ClickDetector")
+                    if click then fireclickdetector(click) end
+                end
+            end
+        end
+    end
+})
+
+-- ========== CONTROLS ==========
+local farmToggle = FarmSection:Toggle({
+    Text = "ENABLE MACRO (Q)",
+    Callback = function(bool)
+        isFarming = bool
+        if isFarming then 
+            scanForHive()
+            local zone = FlowerZones:FindFirstChild(currentField)
+            if zone and not isConverting then 
+                stableTeleport(zone.CFrame) 
+                placeSprinkler() 
+            end
+        end
+    end
+})
+
+FarmSection:Dropdown({ Text = "Select Field", List = Fields, Callback = function(v) currentField = v end })
+FarmSection:Toggle({ Text = "Farm Bubbles", Callback = function(b) farmBubbles = b end })
+FarmSection:Toggle({ Text = "Farm Balloons", Callback = function(b) farmBalloons = b end })
+
+-- TABS (TELEPORTS & QUESTS)
+local TPSection = TPTab:Section({ Text = "Quick Field TP" })
+for _, name in ipairs(Fields) do
+    if name ~= "All" then
+        TPSection:Button({Text = "TP: "..name, Callback = function() local z = FlowerZones:FindFirstChild(name) if z then stableTeleport(z.CFrame) end end})
+    end
+end
+
+local QuestSection = QuestTab:Section({ Text = "NPC Teleports" })
+for _, b in ipairs({"Black Bear", "Brown Bear", "Panda Bear", "Science Bear", "Polar Bear", "Mother Bear"}) do
+    QuestSection:Button({Text = "Go to " .. b, Callback = function() local n = workspace.NPCs:FindFirstChild(b) if n then stableTeleport(n:GetPivot()) end end})
+end
+
+-- ========== LOOPS ==========
+
+-- Tool Clicker
+task.spawn(function()
+    while true do
+        if isFarming and not isConverting then
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            task.wait(0.05)
+            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        end
+        task.wait(0.05)
+    end
+end)
+
+-- Auto-Convert (WITH 2s BUFFER & Sprinkler)
+task.spawn(function()
+    while task.wait(1) do
+        local stats = player:FindFirstChild("CoreStats")
+        if isFarming and stats and stats.Pollen.Value >= stats.Capacity.Value and not isConverting then
+            isConverting = true
+            if not myPlatform then scanForHive() end
+            if myPlatform then
+                stableTeleport(myPlatform:GetPivot())
+                task.wait(1)
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+                repeat task.wait(1) until stats.Pollen.Value == 0 or not isFarming
+                task.wait(2) -- Bee Buffer
+                isConverting = false
+                local zone = FlowerZones:FindFirstChild(currentField)
+                if zone then 
+                    stableTeleport(zone.CFrame) 
+                    placeSprinkler() 
+                end
+            end
+        end
+    end
+end)
+
+-- Heartbeat Scanning
+local ignored = {}
+RunService.Heartbeat:Connect(function()
+    if not isFarming or isConverting then return end
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    player.Character.Humanoid.WalkSpeed = walkSpeed
+    
+    local target, bestDist = nil, collectRadius
+    local fieldZone = FlowerZones:FindFirstChild(currentField)
+    local activeBalloon = nil
+
+    -- Balloon Anchor
+    if farmBalloons and workspace:FindFirstChild("Balloons") then
+        for _, b in pairs(workspace.Balloons.FieldBalloons:GetChildren()) do
+            local owner = b:FindFirstChild("PlayerName") or b:FindFirstChild("Username")
+            if owner and owner.Value == player.Name then
+                local body = b:FindFirstChild("BalloonBody")
+                if body and fieldZone then
+                    local rel = fieldZone.CFrame:PointToObjectSpace(body.Position)
+                    if math.abs(rel.X) <= fieldZone.Size.X/2 and math.abs(rel.Z) <= fieldZone.Size.Z/2 then
+                        activeBalloon = body
+                    end
+                end
+            end
+        end
+    end
+
+    -- Token/Bubble Scan
+    local folders = {workspace:FindFirstChild("Collectibles"), workspace:FindFirstChild("Tokens")}
+    if farmBubbles and workspace:FindFirstChild("Particles") then table.insert(folders, workspace.Particles) end
+    
+    for _, folder in pairs(folders) do
+        for _, v in pairs(folder:GetChildren()) do
+            if (v:IsA("BasePart") or v:IsA("Model") or (farmBubbles and v.Name == "Bubble")) and not ignored[v] then
+                local pos = v:IsA("Model") and v:GetPivot().Position or v.Position
+                local dist = (hrp.Position - pos).Magnitude
+                local inField = true
+                if fieldZone then
+                    local rel = fieldZone.CFrame:PointToObjectSpace(pos)
+                    if math.abs(rel.X) > fieldZone.Size.X/2 or math.abs(rel.Z) > fieldZone.Size.Z/2 then inField = false end
+                end
+                if inField and dist < bestDist then bestDist = dist; target = v end
+            end
+        end
+    end
+
+    local movePos = nil
+    if target then
+        local tPos = target:IsA("Model") and target:GetPivot().Position or target.Position
+        movePos = Vector3.new(tPos.X, hrp.Position.Y, tPos.Z)
+        if (hrp.Position - tPos).Magnitude < 6 then
+            ignored[target] = true
+            task.delay(1, function() ignored[target] = nil end)
+        end
+    elseif activeBalloon then
+        movePos = Vector3.new(activeBalloon.Position.X, hrp.Position.Y, activeBalloon.Position.Z)
+    end
+
+    if movePos then player.Character.Humanoid:MoveTo(movePos) end
+end)
+
+UserInputService.InputBegan:Connect(function(i, gpe)
+    if gpe then return end
+    if i.KeyCode == Enum.KeyCode.Q then isFarming = not isFarming farmToggle:Set(isFarming)
+    elseif i.KeyCode == Enum.KeyCode.F3 then
+        local ui = game:GetService("CoreGui"):FindFirstChild("Unnamed") or player.PlayerGui:FindFirstChild("Unnamed")
+        if ui then ui.Enabled = not ui.Enabled end
+    end
+end)
