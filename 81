@@ -13,7 +13,7 @@ local Config = {
     farmBalloons = true,
     autoClicker = true,
     rainbowBees = false,
-    fieldColor = Color3.fromRGB(255, 255, 255)
+    rainbowField = false -- New Toggle for Rainbow Field
 }
 
 local RunService = game:GetService("RunService")
@@ -30,6 +30,24 @@ local Fields = {"Sunflower Field", "Mushroom Field", "Clover Field", "Spider Fie
 player.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new())
+end)
+
+-- ========== RAINBOW FIELD LOGIC ==========
+task.spawn(function()
+    while task.wait(0.05) do
+        if Config.rainbowField then
+            local color = Color3.fromHSV(tick() % 5 / 5, 1, 1)
+            local zone = FlowerZones:FindFirstChild(Config.currentField)
+            if zone then
+                for _, v in pairs(workspace.Flowers:GetChildren()) do
+                    -- Checks if flower is within the current field radius
+                    if (v.Position - zone.Position).Magnitude < 150 then
+                        v.Color = color
+                    end
+                end
+            end
+        end
+    end
 end)
 
 -- ========== RAINBOW BUOYANT BEES ==========
@@ -51,7 +69,7 @@ task.spawn(function()
     end
 end)
 
--- ========== AUTO-CLICKER LOOP ==========
+-- ========== AUTO-CLICKER ==========
 task.spawn(function()
     while true do
         task.wait(0.01)
@@ -78,7 +96,7 @@ local function deployToField()
 end
 
 -- ========== UI SETUP ==========
-local Window = Library:Window({ Text = "BSS Internal V76 - FULL" })
+local Window = Library:Window({ Text = "BSS Internal V76 - RAINBOW" })
 
 local MainTab = Window:Tab({ Text = "Macro Setup" })
 local TPTab = Window:Tab({ Text = "Teleports" })
@@ -92,10 +110,9 @@ local TPSection = TPTab:Section({ Text = "Field Teleports" })
 local QuestSection = QuestTab:Section({ Text = "NPC Teleports" })
 local BeeSection = ExploitTab:Section({ Text = "Bee Customization" })
 local VisualSection = VisualsTab:Section({ Text = "Environment Visuals" })
-local ThemeSection = VisualsTab:Section({ Text = "UI Themes" })
 local ConfigSection = SettingsTab:Section({ Text = "Macro Configuration" })
 
--- Farm Controls
+-- DROPDOWN FIX
 local FieldDropdown
 FieldDropdown = FarmSection:Dropdown({
     Text = "Current Field: " .. Config.currentField,
@@ -119,26 +136,11 @@ local farmToggle = FarmSection:Toggle({
     end
 })
 
--- Visual Customization
-VisualSection:Colorpicker({
-    Text = "Field/Flower Color",
-    Default = Color3.fromRGB(255, 255, 255),
-    Callback = function(color)
-        Config.fieldColor = color
-        local zone = FlowerZones:FindFirstChild(Config.currentField)
-        if zone then
-            for _, v in pairs(workspace.Flowers:GetChildren()) do
-                if (v.Position - zone.Position).Magnitude < 150 then
-                    v.Color = color
-                end
-            end
-        end
-    end
-})
-
+-- VISUALS TABS
+VisualSection:Toggle({ Text = "Rainbow Field", Callback = function(v) Config.rainbowField = v end })
 BeeSection:Toggle({ Text = "Rainbow Buoyant Bees", Callback = function(v) Config.rainbowBees = v end })
 
--- Teleports & Quests (Restored)
+-- Teleports & Quests
 for _, name in ipairs(Fields) do 
     TPSection:Button({Text = name, Callback = function() player.Character.HumanoidRootPart.CFrame = FlowerZones[name].CFrame * CFrame.new(0,5,0) end}) 
 end
@@ -154,7 +156,7 @@ end
 ConfigSection:Slider({ Text = "WalkSpeed", Default = 50, Minimum = 16, Maximum = 200, Callback = function(v) Config.walkSpeed = v end })
 ConfigSection:Slider({ Text = "Collect Radius", Default = 120, Minimum = 20, Maximum = 300, Callback = function(v) Config.collectRadius = v end })
 
--- ========== SNAPPY MOVEMENT ENGINE ==========
+-- ========== MOVEMENT ENGINE ==========
 local ignoredTokens = {}
 RunService.Heartbeat:Connect(function()
     if not Config.isFarming or Config.isConverting then return end
