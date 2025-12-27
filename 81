@@ -1,18 +1,20 @@
 local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/Rain-Design/Unnamed/main/Library.lua'))()
+Library.Theme = "Dark"
 
 -- ========== CONFIGURATION / STATE ==========
--- [EDUCATIONAL] These variables store the "state" of your script. 
--- Adding a new feature usually starts by adding a variable here.
 local Config = {
     isFarming = false,
     currentField = "Sunflower Field",
     walkSpeed = 50,
-    collectRadius = 80,
+    collectRadius = 120, 
     isConverting = false,
     myPlatform = nil,
     farmBubbles = false,
     farmBalloons = false,
-    menuKeybind = Enum.KeyCode.F3 -- Default keybind
+    autoClicker = true,
+    movementPattern = "Spiral", 
+    beeColor = Color3.fromRGB(255, 255, 255),
+    rainbowBees = false
 }
 
 local RunService = game:GetService("RunService")
@@ -38,27 +40,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- ========== VISUALIZER (0.4 BLUE BOX) ==========
-local FieldBox = Instance.new("Part")
-FieldBox.Name = "MacroVisualBox"
-FieldBox.Material = Enum.Material.ForceField
-FieldBox.Color = Color3.fromRGB(0, 150, 255)
-FieldBox.Transparency = 1 
-FieldBox.CanCollide = false
-FieldBox.Anchored = true
-FieldBox.Parent = workspace
-
-local function updateFieldVisual()
-    local zone = FlowerZones:FindFirstChild(Config.currentField)
-    if Config.isFarming and zone and not Config.isConverting then
-        FieldBox.Transparency = 0.4
-        FieldBox.Size = zone.Size + Vector3.new(0, 2, 0)
-        FieldBox.CFrame = zone.CFrame
-    else
-        FieldBox.Transparency = 1
-    end
-end
-
 -- ========== CORE FUNCTIONS ==========
 local function scanForHive()
     local platforms = workspace:FindFirstChild("HivePlatforms")
@@ -81,7 +62,7 @@ local function deployToField()
         hrp.Anchored = false 
         hrp.Velocity = Vector3.zero
         hrp.CFrame = zone.CFrame * CFrame.new(0, 3, 0)
-        task.wait(0.3)
+        task.wait(0.2)
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.One, false, game)
         task.wait(0.05)
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.One, false, game)
@@ -89,72 +70,53 @@ local function deployToField()
 end
 
 -- ========== UI SETUP ==========
--- [EDUCATIONAL] Library:Window creates the main frame. 
--- Library.Theme can be "Dark", "Light", or a custom Color3.
-Library.Theme = "Dark" 
-local Window = Library:Window({ Text = "BSS Internal V70 - PRO" })
+local Window = Library:Window({ Text = "BSS Internal V76 - DELUXE" })
 
 local MainTab = Window:Tab({ Text = "Macro Setup" })
 local TPTab = Window:Tab({ Text = "Teleports" })
+local QuestTab = Window:Tab({ Text = "Quests" })
 local ExploitTab = Window:Tab({ Text = "Exploits" })
-local SettingsTab = Window:Tab({ Text = "Settings" }) -- New Settings Tab
+local VisualsTab = Window:Tab({ Text = "Visuals" })
+local SettingsTab = Window:Tab({ Text = "Settings" })
 
--- SECTIONS
 local FarmSection = MainTab:Section({ Text = "Automation" })
-local MacroSettings = MainTab:Section({ Text = "Macro Config" })
+local MoveSection = MainTab:Section({ Text = "Movement Style" })
 local TPSection = TPTab:Section({ Text = "Field Teleports" })
-local StickerSection = ExploitTab:Section({ Text = "Stickers" })
-local MenuSection = SettingsTab:Section({ Text = "Menu Customization" })
-local InfoSection = SettingsTab:Section({ Text = "Player Info" })
+local QuestSection = QuestTab:Section({ Text = "NPC Teleports" })
+local BeeSection = ExploitTab:Section({ Text = "Bee Customization" })
+local ThemeSection = VisualsTab:Section({ Text = "UI Themes" })
+local ConfigSection = SettingsTab:Section({ Text = "Configuration" })
 
--- INFO SECTION (Honey Tracker)
--- [EDUCATIONAL] Labels are great for showing real-time data.
-local HoneyLabel = InfoSection:Label({ Text = "Honey: 0" })
-task.spawn(function()
-    while task.wait(0.5) do
-        local stats = player:FindFirstChild("CoreStats")
-        if stats and stats:FindFirstChild("Honey") then
-            -- Formats number with commas (e.g., 1,000,000)
-            local formattedHoney = tostring(stats.Honey.Value):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
-            HoneyLabel:SetText("Current Honey: " .. formattedHoney)
-        end
-    end
-end)
-
--- MENU CUSTOMIZATION
-MenuSection:Colorpicker({
-    Text = "Menu Accent Color",
-    Default = Color3.fromRGB(0, 150, 255),
-    Callback = function(color)
-        Library.Theme = color -- Updates the UI theme instantly
+-- !!! FIX: DROPDOWN TEXT UPDATER !!!
+local FieldDropdown = FarmSection:Dropdown({
+    Text = "Current Field: " .. Config.currentField,
+    List = Fields,
+    Callback = function(v)
+        Config.currentField = v
+        -- If your library supports renaming the label:
+        -- FieldDropdown:SetText("Field: " .. v) 
+        print("Selected Field: " .. v)
     end
 })
 
-MenuSection:Bind({
-    Text = "Open/Close Menu",
-    Default = Enum.KeyCode.F3,
-    Callback = function(key)
-        Config.menuKeybind = key
-    end
+-- Movement Style Dropdown
+MoveSection:Dropdown({
+    Text = "Pattern Type",
+    List = {"Direct", "Spiral", "ZigZag"},
+    Callback = function(v) Config.movementPattern = v end
 })
 
--- STICKERS
-StickerSection:Button({
-    Text = "Reveal & TP All Stickers",
-    Callback = function()
-        local folder = workspace:FindFirstChild("HiddenStickers")
-        if folder then
-            for _, sticker in pairs(folder:GetChildren()) do
-                sticker.Transparency = 0.3
-                sticker.CFrame = player.Character.HumanoidRootPart.CFrame
-                local cd = sticker:FindFirstChildOfClass("ClickDetector")
-                if cd then fireclickdetector(cd) end
-            end
-        end
-    end
-})
+-- Bee Customization
+BeeSection:Toggle({ Text = "Rainbow Bees", Callback = function(v) Config.rainbowBees = v end })
 
--- MACRO CONTROLS
+-- Theme Customization
+ThemeSection:Button({ Text = "Dark Mode", Callback = function() Library.Theme = "Dark" end })
+ThemeSection:Button({ Text = "Light Mode", Callback = function() Library.Theme = "Light" end })
+
+-- Main Config Sliders
+ConfigSection:Slider({ Text = "WalkSpeed", Default = 50, Minimum = 16, Maximum = 200, Callback = function(v) Config.walkSpeed = v end })
+ConfigSection:Slider({ Text = "Collect Radius", Default = 120, Minimum = 20, Maximum = 300, Callback = function(v) Config.collectRadius = v end })
+
 local farmToggle = FarmSection:Toggle({
     Text = "ENABLE MACRO (Q)",
     Callback = function(bool)
@@ -163,96 +125,84 @@ local farmToggle = FarmSection:Toggle({
     end
 })
 
-FarmSection:Dropdown({ Text = "Select Field", List = Fields, Callback = function(v) Config.currentField = v end })
-FarmSection:Toggle({ Text = "Farm Bubbles", Callback = function(b) Config.farmBubbles = b end })
-FarmSection:Toggle({ Text = "Farm Balloons", Callback = function(b) Config.farmBalloons = b end })
+-- Teleport Buttons
+for _, name in ipairs(Fields) do 
+    TPSection:Button({Text = name, Callback = function() player.Character.HumanoidRootPart.CFrame = FlowerZones[name].CFrame * CFrame.new(0,5,0) end}) 
+end
 
-MacroSettings:Slider({
-    Text = "Permanent WalkSpeed",
-    Default = 50, Minimum = 16, Maximum = 200,
-    Callback = function(v) Config.walkSpeed = v end
-})
-
-MacroSettings:Slider({ Text = "Collect Radius", Default = 80, Minimum = 20, Maximum = 200, Callback = function(v) Config.collectRadius = v end })
-
--- TELEPORTS
-for _, name in ipairs(Fields) do
-    TPSection:Button({Text = name, Callback = function() 
-        local z = FlowerZones:FindFirstChild(name)
-        if z then player.Character.HumanoidRootPart.CFrame = z.CFrame * CFrame.new(0,5,0) end 
+-- NPC Buttons
+for _, b in ipairs({"Black Bear", "Brown Bear", "Panda Bear", "Science Bear", "Polar Bear", "Mother Bear"}) do
+    QuestSection:Button({Text = b, Callback = function() 
+        local n = workspace.NPCs:FindFirstChild(b) 
+        if n then player.Character.HumanoidRootPart.CFrame = n:GetPivot() * CFrame.new(0,3,0) end 
     end})
 end
 
--- ========== LOOPS ==========
+-- ========== STUTTER-STEP MOVEMENT ENGINE ==========
+local ignoredTokens = {}
+local moveAngle = 0
 
--- AUTO-CLICK
-task.spawn(function()
-    while true do
-        if Config.isFarming and not Config.isConverting then
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            task.wait(0.01)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-            task.wait(0.01)
-        else task.wait(0.5) end
-    end
-end)
-
--- MOVEMENT ENGINE
-local ignored = {}
 RunService.Heartbeat:Connect(function()
-    updateFieldVisual()
     if not Config.isFarming or Config.isConverting then return end
+    
     local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChild("Humanoid")
     if not hrp or not hum then return end
 
-    local target = nil
-    local bestDist = Config.collectRadius
+    -- Jump if stuck (Bamboo stalks)
+    if hrp.Velocity.Magnitude < 2 and hum.MoveDirection.Magnitude > 0 then hum.Jump = true end
+
     local zone = FlowerZones:FindFirstChild(Config.currentField)
-    local folders = {workspace:FindFirstChild("Collectibles"), workspace:FindFirstChild("Tokens")}
-    if Config.farmBubbles then table.insert(folders, workspace:FindFirstChild("Particles")) end
+    local bestTarget = nil
+    local minDistance = Config.collectRadius
     
-    for _, folder in pairs(folders) do
-        if folder then
-            for _, v in pairs(folder:GetChildren()) do
-                if not ignored[v] then
-                    local p = v:IsA("BasePart") and v.Position or v:GetPivot().Position
-                    local dist = (hrp.Position - p).Magnitude
-                    local inField = true
-                    if zone then
-                        local rel = zone.CFrame:PointToObjectSpace(p)
-                        if math.abs(rel.X) > zone.Size.X/2 or math.abs(rel.Z) > zone.Size.Z/2 then inField = false end
-                    end
-                    if inField and dist < bestDist then bestDist = dist target = v end
-                end
+    local targets = {}
+    local folders = {workspace:FindFirstChild("Collectibles"), workspace:FindFirstChild("Tokens")}
+    for _, f in pairs(folders) do if f then for _, v in pairs(f:GetChildren()) do table.insert(targets, v) end end end
+
+    for _, token in pairs(targets) do
+        if not ignoredTokens[token] then
+            local pos = token:IsA("BasePart") and token.Position or token:GetPivot().Position
+            local dist = (hrp.Position - pos).Magnitude
+            if dist < minDistance then
+                minDistance = dist
+                bestTarget = token
             end
         end
     end
 
-    if not target and Config.farmBalloons and workspace:FindFirstChild("Balloons") then
-        for _, b in pairs(workspace.Balloons.FieldBalloons:GetChildren()) do
-            if b:FindFirstChild("BalloonBody") and b:FindFirstChild("PlayerName") and b.PlayerName.Value == player.Name then
-                target = b.BalloonBody break
-            end
-        end
-    end
+    if bestTarget then
+        local targetPos = bestTarget:IsA("BasePart") and bestTarget.Position or bestTarget:GetPivot().Position
+        local finalDestination = targetPos
 
-    if target then
-        local tPos = target:IsA("BasePart") and target.Position or target:GetPivot().Position
-        hum:MoveTo(Vector3.new(tPos.X, hrp.Position.Y, tPos.Z))
-        if (hrp.Position - tPos).Magnitude < 5 then
-            ignored[target] = true
-            task.delay(1, function() ignored[target] = nil end)
+        if Config.movementPattern == "Spiral" then
+            moveAngle = moveAngle + 0.2
+            local offset = Vector3.new(math.cos(moveAngle) * 6, 0, math.sin(moveAngle) * 6)
+            finalDestination = targetPos + offset
+        elseif Config.movementPattern == "ZigZag" then
+            moveAngle = moveAngle + 0.1
+            local offset = Vector3.new(math.sin(moveAngle) * 10, 0, 0)
+            finalDestination = targetPos + offset
         end
+
+        hum:MoveTo(finalDestination)
+        
+        if (hrp.Position - targetPos).Magnitude < 4 then
+            ignoredTokens[bestTarget] = true
+            task.delay(0.4, function() ignoredTokens[bestTarget] = nil end)
+        end
+    elseif zone then
+        hum:MoveTo(zone.Position)
     end
 end)
 
--- AUTO-CONVERT
+-- ========== AUTO-CONVERT (AGGRESSIVE 5S) ==========
 task.spawn(function()
     while task.wait(1) do
         local stats = player:FindFirstChild("CoreStats")
         local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        
         if Config.isFarming and stats and stats.Pollen.Value >= stats.Capacity.Value and not Config.isConverting then
             Config.isConverting = true
             if not Config.myPlatform then scanForHive() end
@@ -260,28 +210,25 @@ task.spawn(function()
             hrp.Velocity = Vector3.zero
             local platPos = Config.myPlatform:GetPivot()
             hrp.CFrame = CFrame.new(platPos.X, platPos.Y + 3, platPos.Z) 
-            task.wait(0.3)
+            task.wait(0.5)
             hrp.Anchored = true 
             
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
             
-            local stuckTimer = 0
-            while Config.isFarming and stats.Pollen.Value > 0 do
-                local oldPollen = stats.Pollen.Value
-                task.wait(1)
-                if stats.Pollen.Value >= oldPollen then
-                    stuckTimer = stuckTimer + 1
-                else
-                    stuckTimer = 0 
-                end
+            local lastPollen = stats.Pollen.Value
+            local stuckTicks = 0
 
-                if stuckTimer >= 4 then
+            while Config.isFarming and stats.Pollen.Value > 0 do
+                task.wait(1)
+                if stats.Pollen.Value >= lastPollen then stuckTicks = stuckTicks + 1 else stuckTicks = 0 end
+                if stuckTicks >= 5 then
                     VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-                    stuckTimer = 0 
+                    stuckTicks = 0
                 end
+                lastPollen = stats.Pollen.Value
             end
             
-            task.wait(2.5) 
+            task.wait(2) 
             hrp.Anchored = false
             Config.isConverting = false
             deployToField()
@@ -289,17 +236,13 @@ task.spawn(function()
     end
 end)
 
--- ========== KEYBOARD HANDLING ==========
+-- ========== INPUTS ==========
 UserInputService.InputBegan:Connect(function(i, gpe)
     if gpe then return end
-    
-    -- Farm Toggle Key
     if i.KeyCode == Enum.KeyCode.Q then 
         Config.isFarming = not Config.isFarming 
         farmToggle:Set(Config.isFarming)
-    
-    -- Menu Keybind (Uses the variable from Settings)
-    elseif i.KeyCode == Config.menuKeybind then
+    elseif i.KeyCode == Enum.KeyCode.F3 then
         local ui = game:GetService("CoreGui"):FindFirstChild("Unnamed") or player.PlayerGui:FindFirstChild("Unnamed")
         if ui then ui.Enabled = not ui.Enabled end
     end
